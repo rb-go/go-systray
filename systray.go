@@ -20,6 +20,8 @@ var (
 	hasQuit    = int64(0)
 )
 
+type ClickActionType func() error
+
 // MenuItem is used to keep track each menu item of systray
 // Don't create it directly, use the one systray.AddMenuItem() returned
 type MenuItem struct {

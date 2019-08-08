@@ -37,8 +37,11 @@ const (
 	WM_COMMAND    = 0x0111
 	WM_DESTROY    = 0x0002
 	WM_ENDSESSION = 0x16
-	WM_RBUTTONUP  = 0x0205
-	WM_LBUTTONUP  = 0x0202
+
+	WM_RBUTTONUP     = 0x0205
+	WM_LBUTTONUP     = 0x0202
+	WM_LBUTTONDBLCLK = 0x0203
+	WM_RBUTTONDBLCLK = 0x0206
 
 	IDI_APPLICATION = 32512
 	IDC_ARROW       = 32512 // Standard arrow
@@ -80,8 +83,6 @@ const (
 	TPM_BOTTOMALIGN = 0x0020
 	TPM_LEFTALIGN   = 0x0000
 )
-
-type ClickActionType func() error
 
 // Helpful sources: https://github.com/golang/exp/blob/master/shiny/driver/internal/win32
 
@@ -241,8 +242,10 @@ type winTray struct {
 
 	visibleItems []uint32
 
-	leftClickAction  ClickActionType
-	rightClickAction ClickActionType
+	leftClickAction     ClickActionType
+	rightClickAction    ClickActionType
+	leftDblClickAction  ClickActionType
+	rightDblClickAction ClickActionType
 }
 
 // Loads an image from file and shows it in tray.
@@ -320,6 +323,10 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 			t.rightClickAction()
 		case WM_LBUTTONUP:
 			t.leftClickAction()
+		case WM_RBUTTONDBLCLK:
+			t.rightDblClickAction()
+		case WM_LBUTTONDBLCLK:
+			t.leftDblClickAction()
 		}
 	case t.wmTaskbarCreated: // on explorer.exe restarts
 		t.nid.add()
@@ -339,6 +346,11 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 func (t *winTray) initInstance() error {
 
 	t.wmSystrayMessage = WM_USER + 1
+
+	t.rightClickAction = t.showMenu
+	t.leftClickAction = t.showMenu
+	t.rightDblClickAction = t.showMenu
+	t.leftDblClickAction = t.showMenu
 
 	taskbarEventNamePtr, _ := windows.UTF16PtrFromString("TaskbarCreated")
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms644947
@@ -657,24 +669,52 @@ func quit() {
 	)
 }
 
-// SetCustomLeftClickAction
+// SetCustomLeftClickAction set custom function to process left click on icon
+// only windows at this moment
 func SetCustomLeftClickAction(ff ClickActionType) {
 	wt.leftClickAction = ff
 }
 
-// SetCustomRightClickAction
+// SetCustomRightClickAction set custom function to process right click on icon
+// only windows at this moment
 func SetCustomRightClickAction(ff ClickActionType) {
 	wt.rightClickAction = ff
 }
 
-// SetDefaultLeftClickAction
+// SetDefaultLeftClickAction set defualt function to process left click on icon (show menu)
+// only windows at this moment
 func SetDefaultLeftClickAction() {
 	wt.leftClickAction = wt.showMenu
 }
 
-// SetDefaultRightClickAction
+// SetDefaultRightClickAction  set defualt function to process right click on icon (show menu)
+// only windows at this moment
 func SetDefaultRightClickAction() {
 	wt.rightClickAction = wt.showMenu
+}
+
+// SetCustomLeftDoubleClickAction set custom function to process left click on icon
+// only windows at this moment
+func SetCustomLeftDoubleClickAction(ff ClickActionType) {
+	wt.leftDblClickAction = ff
+}
+
+// SetCustomRightDoubleClickAction set custom function to process right click on icon
+// only windows at this moment
+func SetCustomRightDoubleClickAction(ff ClickActionType) {
+	wt.rightDblClickAction = ff
+}
+
+// SetDefaultLeftDoubleClickAction set defualt function to process left click on icon (show menu)
+// only windows at this moment
+func SetDefaultLeftDoubleClickAction() {
+	wt.leftDblClickAction = wt.showMenu
+}
+
+// SetDefaultRightDoubleClickAction  set defualt function to process right click on icon (show menu)
+// only windows at this moment
+func SetDefaultRightDoubleClickAction() {
+	wt.rightDblClickAction = wt.showMenu
 }
 
 // SetIcon sets the systray icon.

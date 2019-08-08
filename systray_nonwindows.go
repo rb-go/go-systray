@@ -23,6 +23,62 @@ func quit() {
 	C.quit()
 }
 
+// SetCustomLeftClickAction set custom function to process left click on icon
+// only windows at this moment
+func SetCustomLeftClickAction(ff ClickActionType) {
+	// do nothing
+	// todo
+}
+
+// SetCustomRightClickAction set custom function to process right click on icon
+// only windows at this moment
+func SetCustomRightClickAction(ff ClickActionType) {
+	// do nothing
+	// todo
+}
+
+// SetDefaultLeftClickAction set defualt function to process left click on icon (show menu)
+// only windows at this moment
+func SetDefaultLeftClickAction() {
+	// do nothing
+	// todo
+}
+
+// SetDefaultRightClickAction  set defualt function to process right click on icon (show menu)
+// only windows at this moment
+func SetDefaultRightClickAction() {
+	// do nothing
+	// todo
+}
+
+// SetCustomLeftClickAction set custom function to process left Double click on icon
+// only windows at this moment
+func SetCustomLeftDoubleClickAction(ff ClickActionType) {
+	// do nothing
+	// todo
+}
+
+// SetCustomRightClickAction set custom function to process right Double click on icon
+// only windows at this moment
+func SetCustomRightDoubleClickAction(ff ClickActionType) {
+	// do nothing
+	// todo
+}
+
+// SetDefaultLeftClickAction set defualt function to process left Double click on icon (show menu)
+// only windows at this moment
+func SetDefaultLeftDoubleClickAction() {
+	// do nothing
+	// todo
+}
+
+// SetDefaultRightClickAction  set defualt function to process right Double click on icon (show menu)
+// only windows at this moment
+func SetDefaultRightDoubleClickAction() {
+	// do nothing
+	// todo
+}
+
 // SetIcon sets the systray icon.
 // iconBytes should be the content of .ico for windows and .ico/.jpg/.png
 // for other platforms.
