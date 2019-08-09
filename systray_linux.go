@@ -18,7 +18,7 @@ import (
 
 func nativeLoop() (err error) {
 	_, err = C.nativeLoop()
-	return
+	return err
 }
 
 func quit() error {
