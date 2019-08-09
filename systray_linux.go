@@ -151,14 +151,14 @@ func setCustomRightClickAction(ff ClickActionType) {
 	// todo
 }
 
-// SetDefaultLeftClickAction set defualt function to process left click on icon (show menu)
+// SetDefaultLeftClickAction set default function to process left click on icon (show menu)
 // only windows at this moment
 func setDefaultLeftClickAction() {
 	// do nothing
 	// todo
 }
 
-// SetDefaultRightClickAction  set defualt function to process right click on icon (show menu)
+// SetDefaultRightClickAction  set default function to process right click on icon (show menu)
 // only windows at this moment
 func setDefaultRightClickAction() {
 	// do nothing
@@ -179,14 +179,14 @@ func setCustomRightDoubleClickAction(ff ClickActionType) {
 	// todo
 }
 
-// SetDefaultLeftClickAction set defualt function to process left Double click on icon (show menu)
+// SetDefaultLeftClickAction set default function to process left Double click on icon (show menu)
 // only windows at this moment
 func setDefaultLeftDoubleClickAction() {
 	// do nothing
 	// todo
 }
 
-// SetDefaultRightClickAction  set defualt function to process right Double click on icon (show menu)
+// SetDefaultRightClickAction  set default function to process right Double click on icon (show menu)
 // only windows at this moment
 func setDefaultRightDoubleClickAction() {
 	// do nothing

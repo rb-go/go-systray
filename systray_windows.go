@@ -777,13 +777,13 @@ func setCustomRightClickAction(ff ClickActionType) {
 	rightClickAction = ff
 }
 
-// SetDefaultLeftClickAction set defualt function to process left click on icon (show menu)
+// SetDefaultLeftClickAction set default function to process left click on icon (show menu)
 // only windows at this moment
 func setDefaultLeftClickAction() {
 	leftClickAction = wt.showMenu
 }
 
-// SetDefaultRightClickAction  set defualt function to process right click on icon (show menu)
+// SetDefaultRightClickAction  set default function to process right click on icon (show menu)
 // only windows at this moment
 func setDefaultRightClickAction() {
 	rightClickAction = wt.showMenu
@@ -801,13 +801,13 @@ func setCustomRightDoubleClickAction(ff ClickActionType) {
 	rightDblClickAction = ff
 }
 
-// SetDefaultLeftDoubleClickAction set defualt function to process left click on icon (show menu)
+// SetDefaultLeftDoubleClickAction set default function to process left click on icon (show menu)
 // only windows at this moment
 func setDefaultLeftDoubleClickAction() {
 	leftDblClickAction = wt.showMenu
 }
 
-// SetDefaultRightDoubleClickAction  set defualt function to process right click on icon (show menu)
+// SetDefaultRightDoubleClickAction  set default function to process right click on icon (show menu)
 // only windows at this moment
 func setDefaultRightDoubleClickAction() {
 	rightDblClickAction = wt.showMenu
