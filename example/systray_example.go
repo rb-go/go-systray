@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/anjannath/systray"
-	"github.com/anjannath/systray/example/icon"
+	"github.com/riftbit/go-systray"
+	"github.com/riftbit/go-systray/example/icon"
 )
 
 var (
