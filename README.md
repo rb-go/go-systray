@@ -7,7 +7,7 @@ Tested on Windows 8, 10, Mac OSX, Ubuntu 14.10 and Debian 7.6.
  - [windows] left click custom handling
  - [windows] right click custom handling
  - [windows] left double click custom handling
- - [windows] right double click custom handling
+ - [all os] multi-level systray menu (tested only on windows)
 
 ## Usage
 ```go
@@ -156,6 +156,12 @@ Consult the [Official Apple Documentation here](https://developer.apple.com/libr
 
 ## Credits
 
-- Based on https://github.com/getlantern/systray
+- Based on anjannath/systray and getlantern/systray
 - https://github.com/xilp/systray
 - https://github.com/cratonica/trayhost
+
+
+## Additional interesting packages
+
+ - [gen2brain/beeep](https://github.com/gen2brain/beeep)
+ - [go-toast/toast](https://github.com/go-toast/toast)

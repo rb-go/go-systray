@@ -8,17 +8,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
 	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
-// https://msdn.microsoft.com/en-us/library/windows/desktop/ms633548(v=vs.85).aspx
-// https://msdn.microsoft.com/en-us/library/windows/desktop/ms632600(v=vs.85).aspx
-// https://msdn.microsoft.com/en-us/library/windows/desktop/ff729176
-// https://msdn.microsoft.com/en-us/library/windows/desktop/ms644931(v=vs.85).aspx
 const (
 	className  = "SystrayClass"
 	windowName = ""
@@ -82,24 +77,28 @@ const (
 
 	TPM_BOTTOMALIGN = 0x0020
 	TPM_LEFTALIGN   = 0x0000
+
+	MIIM_SUBMENU = 0x00000004
+	MIIM_BITMAP  = 0x00000080
 )
 
 // Helpful sources: https://github.com/golang/exp/blob/master/shiny/driver/internal/win32
 
 var (
-	k32              = windows.NewLazySystemDLL("Kernel32.dll")
-	s32              = windows.NewLazySystemDLL("Shell32.dll")
-	u32              = windows.NewLazySystemDLL("User32.dll")
-	pGetModuleHandle = k32.NewProc("GetModuleHandleW")
-	pShellNotifyIcon = s32.NewProc("Shell_NotifyIconW")
-	pCreatePopupMenu = u32.NewProc("CreatePopupMenu")
-	pCreateWindowEx  = u32.NewProc("CreateWindowExW")
-	pDefWindowProc   = u32.NewProc("DefWindowProcW")
-	pDeleteMenu      = u32.NewProc("DeleteMenu")
-	pDestroyWindow   = u32.NewProc("DestroyWindow")
-	pDispatchMessage = u32.NewProc("DispatchMessageW")
-	pGetCursorPos    = u32.NewProc("GetCursorPos")
-	// pGetMenuItemID         = u32.NewProc("GetMenuItemID") // unused variable
+	k32                    = windows.NewLazySystemDLL("Kernel32.dll")
+	s32                    = windows.NewLazySystemDLL("Shell32.dll")
+	u32                    = windows.NewLazySystemDLL("User32.dll")
+	pGetModuleHandle       = k32.NewProc("GetModuleHandleW")
+	pShellNotifyIcon       = s32.NewProc("Shell_NotifyIconW")
+	pCreatePopupMenu       = u32.NewProc("CreatePopupMenu")
+	pCreateWindowEx        = u32.NewProc("CreateWindowExW")
+	pDefWindowProc         = u32.NewProc("DefWindowProcW")
+	pDeleteMenu            = u32.NewProc("DeleteMenu")
+	pDestroyWindow         = u32.NewProc("DestroyWindow")
+	pDispatchMessage       = u32.NewProc("DispatchMessageW")
+	pGetCursorPos          = u32.NewProc("GetCursorPos")
+	pGetMenuItemID         = u32.NewProc("GetMenuItemID")
+	pGetSubMenu            = u32.NewProc("GetSubMenu")
 	pGetMessage            = u32.NewProc("GetMessageW")
 	pInsertMenuItem        = u32.NewProc("InsertMenuItemW")
 	pLoadIcon              = u32.NewProc("LoadIconW")
@@ -112,6 +111,7 @@ var (
 	pSetForegroundWindow   = u32.NewProc("SetForegroundWindow")
 	pSetMenuInfo           = u32.NewProc("SetMenuInfo")
 	pSetMenuItemInfo       = u32.NewProc("SetMenuItemInfoW")
+	pSetMenuItemBitmaps    = u32.NewProc("SetMenuItemBitmaps")
 	pShowWindow            = u32.NewProc("ShowWindow")
 	pTrackPopupMenu        = u32.NewProc("TrackPopupMenu")
 	pTranslateMessage      = u32.NewProc("TranslateMessage")
@@ -237,22 +237,16 @@ type winTray struct {
 	nid          *notifyIconData
 	wcex         *wndClassEx
 
-	wmSystrayMessage,
+	wmSystrayMessage uint32
 	wmTaskbarCreated uint32
-
-	visibleItems []uint32
-
-	leftClickAction     ClickActionType
-	rightClickAction    ClickActionType
-	leftDblClickAction  ClickActionType
-	rightDblClickAction ClickActionType
 }
+
+var menus = make(map[int32]windows.Handle)
 
 // Loads an image from file and shows it in tray.
 // LoadImage: https://msdn.microsoft.com/en-us/library/windows/desktop/ms648045(v=vs.85).aspx
 // Shell_NotifyIcon: https://msdn.microsoft.com/en-us/library/windows/desktop/bb762159(v=vs.85).aspx
 func (t *winTray) setIcon(src string) error {
-
 	// Save and reuse handles of loaded images
 	h, ok := t.loadedImages[src]
 	if !ok {
@@ -301,12 +295,11 @@ var wt winTray
 // WindowProc callback function that processes messages sent to a window.
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms633573(v=vs.85).aspx
 func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam uintptr) (lResult uintptr) {
-
 	switch message {
 	case WM_COMMAND:
 		menuId := int32(wParam)
 		if menuId != -1 {
-			systrayMenuItemSelected(menuId)
+			systrayMenuItemSelected(menuId, false, false)
 		}
 	case WM_DESTROY:
 		// same as WM_ENDSESSION, but throws 0 exit code after all
@@ -320,13 +313,13 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 	case t.wmSystrayMessage:
 		switch lParam {
 		case WM_RBUTTONUP:
-			t.rightClickAction()
+			rightClickAction()
 		case WM_LBUTTONUP:
-			t.leftClickAction()
+			leftClickAction()
 		case WM_RBUTTONDBLCLK:
-			t.rightDblClickAction()
+			rightDblClickAction()
 		case WM_LBUTTONDBLCLK:
-			t.leftDblClickAction()
+			leftDblClickAction()
 		}
 	case t.wmTaskbarCreated: // on explorer.exe restarts
 		t.nid.add()
@@ -336,21 +329,20 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 		lResult, _, _ = pDefWindowProc.Call(
 			uintptr(hWnd),
 			uintptr(message),
-			uintptr(wParam),
-			uintptr(lParam),
+			wParam,
+			lParam,
 		)
 	}
 	return
 }
 
 func (t *winTray) initInstance() error {
+	rightClickAction = t.showMenu
+	leftClickAction = t.showMenu
+	rightDblClickAction = t.showMenu
+	leftDblClickAction = t.showMenu
 
 	t.wmSystrayMessage = WM_USER + 1
-
-	t.rightClickAction = t.showMenu
-	t.leftClickAction = t.showMenu
-	t.rightDblClickAction = t.showMenu
-	t.leftDblClickAction = t.showMenu
 
 	taskbarEventNamePtr, _ := windows.UTF16PtrFromString("TaskbarCreated")
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms644947
@@ -445,7 +437,6 @@ func (t *winTray) initInstance() error {
 }
 
 func (t *winTray) createMenu() error {
-
 	menuHandle, _, err := pCreatePopupMenu.Call()
 	if menuHandle == 0 {
 		return err
@@ -473,10 +464,86 @@ func (t *winTray) createMenu() error {
 	return nil
 }
 
-func (t *winTray) addOrUpdateMenuItem(menuId int32, title string, disabled, checked bool) error {
-	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647578(v=vs.85).aspx
+// createSubMenu creates a sub menu and stores
+// it in the menus map using the id as key
+func createSubMenu(id int32) error {
+	menuHandle, _, err := pCreatePopupMenu.Call()
+	if menuHandle == 0 {
+		return err
+	}
+	menus[id] = windows.Handle(menuHandle)
 
-	titlePtr, err := windows.UTF16PtrFromString(title)
+	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647575(v=vs.85).aspx
+	mi := struct {
+		Size, Mask, Style, Max uint32
+		Background             windows.Handle
+		ContextHelpID          uint32
+		MenuData               uintptr
+	}{
+		Mask: MIM_APPLYTOSUBMENUS,
+	}
+	mi.Size = uint32(unsafe.Sizeof(mi))
+
+	res, _, err := pSetMenuInfo.Call(
+		uintptr(menus[id]),
+		uintptr(unsafe.Pointer(&mi)),
+	)
+	if res == 0 {
+		return err
+	}
+	return nil
+}
+
+func (t *winTray) addSubmenuToTray(item *MenuItem) error {
+	titlePtr, err := windows.UTF16PtrFromString(item.title)
+	if err != nil {
+		return err
+	}
+
+	mi := menuItemInfo{
+		Mask:     MIIM_FTYPE | MIIM_STRING | MIIM_ID | MIIM_SUBMENU | MIIM_BITMAP,
+		Type:     MFT_STRING,
+		ID:       uint32(item.id),
+		TypeData: titlePtr,
+		Cch:      uint32(len(item.title)),
+		SubMenu:  menus[item.menuId],
+	}
+	mi.Size = uint32(unsafe.Sizeof(mi))
+
+	// The return value is the identifier of the specified menu item.
+	// If the menu item identifier is NULL or if the specified item opens a submenu, the return value is -1.
+	res, _, err := pGetMenuItemID.Call(uintptr(t.menu), uintptr(item.id))
+	if int32(res) == -1 {
+		res, _, err = pInsertMenuItem.Call(
+			uintptr(t.menu),
+			uintptr(item.id),
+			1,
+			uintptr(unsafe.Pointer(&mi)),
+		)
+		if res == 0 {
+			return err
+		}
+	} else {
+		res, _, err = pSetMenuItemInfo.Call(
+			uintptr(t.menu),
+			uintptr(item.id),
+			0,
+			uintptr(unsafe.Pointer(&mi)),
+		)
+		if res == 0 {
+			return err
+		}
+	}
+
+	return nil
+
+}
+
+func (t *winTray) addOrUpdateMenuItem(item *MenuItem) error {
+	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647578(v=vs.85).aspx
+	var menu windows.Handle
+
+	titlePtr, err := windows.UTF16PtrFromString(item.title)
 	if err != nil {
 		return err
 	}
@@ -484,37 +551,47 @@ func (t *winTray) addOrUpdateMenuItem(menuId int32, title string, disabled, chec
 	mi := menuItemInfo{
 		Mask:     MIIM_FTYPE | MIIM_STRING | MIIM_ID | MIIM_STATE,
 		Type:     MFT_STRING,
-		ID:       uint32(menuId),
+		ID:       uint32(item.id),
 		TypeData: titlePtr,
-		Cch:      uint32(len(title)),
+		Cch:      uint32(len(item.title)),
 	}
-	if disabled {
-		mi.State |= MFS_DISABLED
-	}
-	if checked {
+	if item.checkable && item.checked {
 		mi.State |= MFS_CHECKED
+	}
+	if item.disabled {
+		mi.State |= MFS_DISABLED
 	}
 	mi.Size = uint32(unsafe.Sizeof(mi))
 
-	// We set the menu item info based on the menuID
-	res, _, err := pSetMenuItemInfo.Call(
-		uintptr(t.menu),
-		uintptr(menuId),
-		0,
-		uintptr(unsafe.Pointer(&mi)),
-	)
+	// if item is a submenu item then get the id of its parent menu
+	if item.isSubmenuItem {
+		menu = menus[item.menuId]
+	} else {
+		menu = t.menu
+	}
 
-	if res == 0 {
-		t.addToVisibleItems(menuId)
-		position := t.getVisibleItemIndex(menuId)
+	// The return value is the identifier of the specified menu item.
+	// If the menu item identifier is NULL or if the specified item opens a submenu, the return value is -1.
+	res, _, err := pGetMenuItemID.Call(uintptr(menu), uintptr(item.id))
+
+	if int32(res) == -1 {
 		res, _, err = pInsertMenuItem.Call(
-			uintptr(t.menu),
-			uintptr(position),
+			uintptr(menu),
+			uintptr(item.id),
 			1,
 			uintptr(unsafe.Pointer(&mi)),
 		)
 		if res == 0 {
-			t.delFromVisibleItems(menuId)
+			return err
+		}
+	} else {
+		res, _, err = pSetMenuItemInfo.Call(
+			uintptr(menu),
+			uintptr(item.id),
+			0,
+			uintptr(unsafe.Pointer(&mi)),
+		)
+		if res == 0 {
 			return err
 		}
 	}
@@ -524,7 +601,6 @@ func (t *winTray) addOrUpdateMenuItem(menuId int32, title string, disabled, chec
 
 func (t *winTray) addSeparatorMenuItem(menuId int32) error {
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647578(v=vs.85).aspx
-
 	mi := menuItemInfo{
 		Mask: MIIM_FTYPE | MIIM_ID | MIIM_STATE,
 		Type: MFT_SEPARATOR,
@@ -533,11 +609,9 @@ func (t *winTray) addSeparatorMenuItem(menuId int32) error {
 
 	mi.Size = uint32(unsafe.Sizeof(mi))
 
-	t.addToVisibleItems(menuId)
-	position := t.getVisibleItemIndex(menuId)
 	res, _, err := pInsertMenuItem.Call(
 		uintptr(t.menu),
-		uintptr(position),
+		uintptr(menuId),
 		1,
 		uintptr(unsafe.Pointer(&mi)),
 	)
@@ -550,16 +624,14 @@ func (t *winTray) addSeparatorMenuItem(menuId int32) error {
 
 func (t *winTray) hideMenuItem(menuId int32) error {
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647629(v=vs.85).aspx
-
 	res, _, err := pDeleteMenu.Call(
 		uintptr(t.menu),
 		uintptr(uint32(menuId)),
 		MF_BYCOMMAND,
 	)
-	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
+	if res == 0 {
 		return err
 	}
-	t.delFromVisibleItems(menuId)
 
 	return nil
 }
@@ -588,39 +660,13 @@ func (t *winTray) showMenu() error {
 	return nil
 }
 
-func (t *winTray) delFromVisibleItems(val int32) {
-	for i, itemval := range t.visibleItems {
-		if uint32(val) == itemval {
-			t.visibleItems = append(t.visibleItems[:i], t.visibleItems[i+1:]...)
-			break
-		}
-	}
-}
-
-func (t *winTray) addToVisibleItems(val int32) {
-	newvisible := append(t.visibleItems, uint32(val))
-	sort.Slice(newvisible, func(i, j int) bool { return newvisible[i] < newvisible[j] })
-	t.visibleItems = newvisible
-}
-
-func (t *winTray) getVisibleItemIndex(val int32) int {
-	for i, itemval := range t.visibleItems {
-		if uint32(val) == itemval {
-			return i
-		}
-	}
-	return -1
-}
-
-func nativeLoop() {
+func nativeLoop() error {
 	if err := wt.initInstance(); err != nil {
-		log.Errorf("Unable to init instance: %v", err)
-		return
+		return err
 	}
 
 	if err := wt.createMenu(); err != nil {
-		log.Errorf("Unable to create menu: %v", err)
-		return
+		return err
 	}
 
 	defer func() {
@@ -631,7 +677,7 @@ func nativeLoop() {
 	go systrayReady()
 
 	// Main message pump.
-	m := &struct {
+	m := struct {
 		WindowHandle windows.Handle
 		Message      uint32
 		Wparam       uintptr
@@ -640,149 +686,129 @@ func nativeLoop() {
 		Pt           point
 	}{}
 	for {
-		ret, _, err := pGetMessage.Call(uintptr(unsafe.Pointer(m)), 0, 0, 0)
-
-		// If the function retrieves a message other than WM_QUIT, the return value is nonzero.
-		// If the function retrieves the WM_QUIT message, the return value is zero.
-		// If there is an error, the return value is -1
-		// https://msdn.microsoft.com/en-us/library/windows/desktop/ms644936(v=vs.85).aspx
-		switch int32(ret) {
-		case -1:
-			log.Errorf("Error at message loop: %v", err)
-			return
-		case 0:
-			return
-		default:
-			pTranslateMessage.Call(uintptr(unsafe.Pointer(m)))
-			pDispatchMessage.Call(uintptr(unsafe.Pointer(m)))
+		ret, _, err := pGetMessage.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
+		if int32(ret) <= 0 {
+			return err
 		}
+		pTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
+		pDispatchMessage.Call(uintptr(unsafe.Pointer(&m)))
 	}
 }
 
 func quit() {
-
-	pPostMessage.Call(
-		uintptr(wt.window),
-		WM_CLOSE,
-		0,
-		0,
-	)
-}
-
-// SetCustomLeftClickAction set custom function to process left click on icon
-// only windows at this moment
-func SetCustomLeftClickAction(ff ClickActionType) {
-	wt.leftClickAction = ff
-}
-
-// SetCustomRightClickAction set custom function to process right click on icon
-// only windows at this moment
-func SetCustomRightClickAction(ff ClickActionType) {
-	wt.rightClickAction = ff
-}
-
-// SetDefaultLeftClickAction set defualt function to process left click on icon (show menu)
-// only windows at this moment
-func SetDefaultLeftClickAction() {
-	wt.leftClickAction = wt.showMenu
-}
-
-// SetDefaultRightClickAction  set defualt function to process right click on icon (show menu)
-// only windows at this moment
-func SetDefaultRightClickAction() {
-	wt.rightClickAction = wt.showMenu
-}
-
-// SetCustomLeftDoubleClickAction set custom function to process left click on icon
-// only windows at this moment
-func SetCustomLeftDoubleClickAction(ff ClickActionType) {
-	wt.leftDblClickAction = ff
-}
-
-// SetCustomRightDoubleClickAction set custom function to process right click on icon
-// only windows at this moment
-func SetCustomRightDoubleClickAction(ff ClickActionType) {
-	wt.rightDblClickAction = ff
-}
-
-// SetDefaultLeftDoubleClickAction set defualt function to process left click on icon (show menu)
-// only windows at this moment
-func SetDefaultLeftDoubleClickAction() {
-	wt.leftDblClickAction = wt.showMenu
-}
-
-// SetDefaultRightDoubleClickAction  set defualt function to process right click on icon (show menu)
-// only windows at this moment
-func SetDefaultRightDoubleClickAction() {
-	wt.rightDblClickAction = wt.showMenu
+	if wt.window != 0 {
+		pPostMessage.Call(
+			uintptr(wt.window),
+			WM_CLOSE,
+			0,
+			0,
+		)
+	}
 }
 
 // SetIcon sets the systray icon.
-// iconBytes should be the content of .ico for windows and .ico/.jpg/.png
-// for other platforms.
-func SetIcon(iconBytes []byte) {
+// iconBytes should be the content of .ico
+func setIcon(iconBytes []byte) error {
 	bh := md5.Sum(iconBytes)
 	dataHash := hex.EncodeToString(bh[:])
 	iconFilePath := filepath.Join(os.TempDir(), "systray_temp_icon_"+dataHash)
 
 	if _, err := os.Stat(iconFilePath); os.IsNotExist(err) {
 		if err := ioutil.WriteFile(iconFilePath, iconBytes, 0644); err != nil {
-			log.Errorf("Unable to write icon data to temp file: %v", err)
-			return
+			return err
 		}
 	}
 
-	if err := wt.setIcon(iconFilePath); err != nil {
-		log.Errorf("Unable to set icon: %v", err)
-		return
+	return setIconPath(iconFilePath)
+}
+
+func setIconPath(path string) error {
+	return wt.setIcon(path)
+}
+
+func setTitle(title string) error {
+	return nil
+}
+
+func setTooltip(tooltip string) error {
+	return wt.setTooltip(tooltip)
+}
+
+func addOrUpdateMenuItem(item *MenuItem) error {
+	if item.isSeparator {
+		return addSeparator(item.id)
 	}
+	return wt.addOrUpdateMenuItem(item)
 }
 
-// SetTitle sets the systray title, only available on Mac.
-func SetTitle(title string) {
-	// do nothing
-	// todo
+func addSubmenuToTray(item *MenuItem) error {
+	return wt.addSubmenuToTray(item)
 }
 
-// SetIcon sets the icon of a menu item. Only available on Mac.
-func (item *MenuItem) SetIcon(iconBytes []byte) {
-	// do nothing
-	// todo
+func addSeparator(id int32) error {
+	return wt.addSeparatorMenuItem(id)
 }
 
-// SetTooltip sets the systray tooltip to display on mouse hover of the tray icon,
-// only available on Mac and Windows.
-func SetTooltip(tooltip string) {
-	if err := wt.setTooltip(tooltip); err != nil {
-		log.Errorf("Unable to set tooltip: %v", err)
-		return
-	}
+func hideMenuItem(item *MenuItem) error {
+	return wt.hideMenuItem(item.id)
 }
 
-func addOrUpdateMenuItem(item *MenuItem) {
-	err := wt.addOrUpdateMenuItem(item.id, item.title, item.disabled, item.checked)
-	if err != nil {
-		log.Errorf("Unable to addOrUpdateMenuItem: %v", err)
-		return
-	}
+func showMenuItem(item *MenuItem) error {
+	return addOrUpdateMenuItem(item)
 }
 
-func addSeparator(id int32) {
-	err := wt.addSeparatorMenuItem(id)
-	if err != nil {
-		log.Errorf("Unable to addSeparator: %v", err)
-		return
-	}
+func addBitmap(bitmapBytes []byte, item *MenuItem) error {
+	return nil
 }
 
-func hideMenuItem(item *MenuItem) {
-	err := wt.hideMenuItem(item.id)
-	if err != nil {
-		log.Errorf("Unable to hideMenuItem: %v", err)
-		return
-	}
+func addBitmapPath(filepath string, item *MenuItem) error {
+	return nil
 }
 
-func showMenuItem(item *MenuItem) {
-	addOrUpdateMenuItem(item)
+// SetCustomLeftClickAction set custom function to process left click on icon
+// only windows at this moment
+func setCustomLeftClickAction(ff ClickActionType) {
+	leftClickAction = ff
+}
+
+// SetCustomRightClickAction set custom function to process right click on icon
+// only windows at this moment
+func setCustomRightClickAction(ff ClickActionType) {
+	rightClickAction = ff
+}
+
+// SetDefaultLeftClickAction set defualt function to process left click on icon (show menu)
+// only windows at this moment
+func setDefaultLeftClickAction() {
+	leftClickAction = wt.showMenu
+}
+
+// SetDefaultRightClickAction  set defualt function to process right click on icon (show menu)
+// only windows at this moment
+func setDefaultRightClickAction() {
+	rightClickAction = wt.showMenu
+}
+
+// SetCustomLeftDoubleClickAction set custom function to process left click on icon
+// only windows at this moment
+func setCustomLeftDoubleClickAction(ff ClickActionType) {
+	leftDblClickAction = ff
+}
+
+// SetCustomRightDoubleClickAction set custom function to process right click on icon
+// only windows at this moment
+func setCustomRightDoubleClickAction(ff ClickActionType) {
+	rightDblClickAction = ff
+}
+
+// SetDefaultLeftDoubleClickAction set defualt function to process left click on icon (show menu)
+// only windows at this moment
+func setDefaultLeftDoubleClickAction() {
+	leftDblClickAction = wt.showMenu
+}
+
+// SetDefaultRightDoubleClickAction  set defualt function to process right click on icon (show menu)
+// only windows at this moment
+func setDefaultRightDoubleClickAction() {
+	rightDblClickAction = wt.showMenu
 }

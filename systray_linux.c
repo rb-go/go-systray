@@ -3,12 +3,11 @@
 #include <errno.h>
 #include <limits.h>
 #include <libappindicator/app-indicator.h>
-#include "systray.h"
+#include "systray_linux.h"
 
 static AppIndicator *global_app_indicator;
 static GtkWidget *global_tray_menu = NULL;
 static GList *global_menu_items = NULL;
-static char temp_file_name[PATH_MAX] = "";
 
 typedef struct {
 	GtkWidget *menu_item;
@@ -20,6 +19,7 @@ typedef struct {
 	char* title;
 	char* tooltip;
 	short disabled;
+	short checkable;
 	short checked;
 } MenuItemInfo;
 
@@ -36,49 +36,21 @@ int nativeLoop(void) {
 	return 0;
 }
 
-void _unlink_temp_file() {
-	if (strlen(temp_file_name) != 0) {
-		int ret = unlink(temp_file_name);
-		if (ret == -1) {
-			printf("failed to remove temp icon file %s: %s\n", temp_file_name, strerror(errno));
-		}
-		temp_file_name[0] = '\0';
-	}
-}
-
-// runs in main thread, should always return FALSE to prevent gtk to execute it again
-gboolean do_set_icon(gpointer data) {
-	_unlink_temp_file();
-	char *tmpdir = getenv("TMPDIR");
-	if (NULL == tmpdir) {
-		tmpdir = "/tmp";
-	}
-	strncpy(temp_file_name, tmpdir, PATH_MAX-1);
-	strncat(temp_file_name, "/systray_XXXXXX", PATH_MAX-1);
-	temp_file_name[PATH_MAX-1] = '\0';
-
-	GBytes* bytes = (GBytes*)data;
-	int fd = mkstemp(temp_file_name);
-	if (fd == -1) {
-		printf("failed to create temp icon file %s: %s\n", temp_file_name, strerror(errno));
-		return FALSE;
-	}
-	gsize size = 0;
-	gconstpointer icon_data = g_bytes_get_data(bytes, &size);
-	ssize_t written = write(fd, icon_data, size);
-	close(fd);
-	if(written != size) {
-		printf("failed to write temp icon file %s: %s\n", temp_file_name, strerror(errno));
-		return FALSE;
-	}
-	app_indicator_set_icon_full(global_app_indicator, temp_file_name, "");
-	app_indicator_set_attention_icon_full(global_app_indicator, temp_file_name, "");
-	g_bytes_unref(bytes);
-	return FALSE;
-}
-
 void _systray_menu_item_selected(int *id) {
-	systray_menu_item_selected(*id);
+	systray_menu_item_selected(*id, 0);
+}
+
+void _systray_menu_item_changed(int *id) {
+    int checked = 0;
+    GList* it;
+	for(it = global_menu_items; it != NULL; it = it->next) {
+        MenuItemNode* item = (MenuItemNode*)(it->data);
+        if(item->menu_id == *id){
+            checked = gtk_check_menu_item_get_active((GtkCheckMenuItem*)(item->menu_item)) ? 1 : 0;
+            break;
+        }
+    }
+	systray_menu_item_selected(*id, checked);
 }
 
 // runs in main thread, should always return FALSE to prevent gtk to execute it again
@@ -89,16 +61,26 @@ gboolean do_add_or_update_menu_item(gpointer data) {
 		MenuItemNode* item = (MenuItemNode*)(it->data);
 		if(item->menu_id == mii->menu_id){
 			gtk_menu_item_set_label(GTK_MENU_ITEM(item->menu_item), mii->title);
+			if(mii->checkable == 1) {
+			    gtk_check_menu_item_set_active((GtkCheckMenuItem*)(item->menu_item), mii->checked == 1);
+			}
 			break;
 		}
 	}
 
 	// menu id doesn't exist, add new item
 	if(it == NULL) {
-		GtkWidget *menu_item = gtk_menu_item_new_with_label(mii->title);
+		GtkWidget *menu_item;
 		int *id = malloc(sizeof(int));
 		*id = mii->menu_id;
-		g_signal_connect_swapped(G_OBJECT(menu_item), "activate", G_CALLBACK(_systray_menu_item_selected), id);
+		if(mii->checkable) {
+		    menu_item = gtk_check_menu_item_new_with_label(mii->title);
+		    gtk_check_menu_item_set_active((GtkCheckMenuItem*)(menu_item), mii->checked == 1);
+		    g_signal_connect_swapped(G_OBJECT(menu_item), "toggled", G_CALLBACK(_systray_menu_item_changed), id);
+		} else {
+		    menu_item = gtk_menu_item_new_with_label(mii->title);
+		    g_signal_connect_swapped(G_OBJECT(menu_item), "activate", G_CALLBACK(_systray_menu_item_selected), id);
+		}
 		gtk_menu_shell_append(GTK_MENU_SHELL(global_tray_menu), menu_item);
 
 		MenuItemNode* new_item = malloc(sizeof(MenuItemNode));
@@ -160,16 +142,16 @@ gboolean do_show_menu_item(gpointer data) {
 
 // runs in main thread, should always return FALSE to prevent gtk to execute it again
 gboolean do_quit(gpointer data) {
-	_unlink_temp_file();
 	// app indicator doesn't provide a way to remove it, hide it as a workaround
 	app_indicator_set_status(global_app_indicator, APP_INDICATOR_STATUS_PASSIVE);
 	gtk_main_quit();
 	return FALSE;
 }
 
-void setIcon(const char* iconBytes, int length) {
-	GBytes* bytes = g_bytes_new_static(iconBytes, length);
-	g_idle_add(do_set_icon, bytes);
+void setIcon(char* icon_path) {
+	app_indicator_set_icon_full(global_app_indicator, icon_path, "");
+	app_indicator_set_attention_icon_full(global_app_indicator, icon_path, "");
+	free(icon_path);
 }
 
 void setTitle(char* ctitle) {
@@ -181,15 +163,13 @@ void setTooltip(char* ctooltip) {
 	free(ctooltip);
 }
 
-void setMenuItemIcon(const char* iconBytes, int length, int menuId) {
-}
-
-void add_or_update_menu_item(int menu_id, char* title, char* tooltip, short disabled, short checked) {
+void add_or_update_menu_item(int menu_id, char* title, char* tooltip, short disabled, short checkable, short checked) {
 	MenuItemInfo *mii = malloc(sizeof(MenuItemInfo));
 	mii->menu_id = menu_id;
 	mii->title = title;
 	mii->tooltip = tooltip;
 	mii->disabled = disabled;
+	mii->checkable = checkable;
 	mii->checked = checked;
 	g_idle_add(do_add_or_update_menu_item, mii);
 }
