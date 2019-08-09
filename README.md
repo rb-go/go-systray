@@ -27,22 +27,27 @@ var (
 )
 
 func main() {
+	//systray.SetCustomLeftClickAction()
+	//systray.SetCustomRightClickAction()
 	systray.Run(onReady, onExit)
 }
 
 func onReady() {
 	timezone = "Local"
 	systray.SetIcon(getIcon("assets/icon.ico"))
-	// or []byte version - systray.SetIcon(iconData)
 
-	localTime := systray.AddMenuItem("Local time", "Local time")
-	hcmcTime := systray.AddMenuItem("Ho Chi Minh time", "Asia/Ho_Chi_Minh")
-	sydTime := systray.AddMenuItem("Sydney time", "Australia/Sydney")
-	gdlTime := systray.AddMenuItem("Guadalajara time", "America/Mexico_City")
-	sfTime := systray.AddMenuItem("San Fransisco time", "America/Los_Angeles")
+	submenu := systray.AddSubMenu("SubMenu")
+	_ = submenu.AddSubMenuItem("Start", "", 0)
+	_ = submenu.AddSubMenuItem("Stop", "", 0)
+
+	localTime := systray.AddMenuItem("Local time", "Local time", 0)
+	hcmcTime := systray.AddMenuItem("Ho Chi Minh time", "Asia/Ho_Chi_Minh", 0)
+	sydTime := systray.AddMenuItem("Sydney time", "Australia/Sydney", 0)
+	gdlTime := systray.AddMenuItem("Guadalajara time", "America/Mexico_City", 0)
+	sfTime := systray.AddMenuItem("San Fransisco time", "America/Los_Angeles", 0)
+
 	systray.AddSeparator()
-	mQuit := systray.AddMenuItem("Quit", "Quits this app")
-	mQuit.SetIcon(iconData)
+	mQuit := systray.AddMenuItem("Quit", "Quits this app", 0)
 
 	go func() {
 		for {
@@ -55,17 +60,17 @@ func onReady() {
 	go func() {
 		for {
 			select {
-			case <-localTime.ClickedCh:
+			case <-localTime.OnClickCh():
 				timezone = "Local"
-			case <-hcmcTime.ClickedCh:
+			case <-hcmcTime.OnClickCh():
 				timezone = "Asia/Ho_Chi_Minh"
-			case <-sydTime.ClickedCh:
+			case <-sydTime.OnClickCh():
 				timezone = "Australia/Sydney"
-			case <-gdlTime.ClickedCh:
+			case <-gdlTime.OnClickCh():
 				timezone = "America/Mexico_City"
-			case <-sfTime.ClickedCh:
+			case <-sfTime.OnClickCh():
 				timezone = "America/Los_Angeles"
-			case <-mQuit.ClickedCh:
+			case <-mQuit.OnClickCh():
 				systray.Quit()
 				return
 			}
@@ -97,10 +102,6 @@ func getIcon(s string) []byte {
 		fmt.Print(err)
 	}
 	return b
-}
-
-var iconData []byte = []byte{
-	0xff, 0xff, // trimmed!!! check full version in example directory
 }
 
 ```
