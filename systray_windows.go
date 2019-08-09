@@ -15,71 +15,54 @@ import (
 )
 
 const (
-	className  = "SystrayClass"
-	windowName = ""
-
-	NIM_ADD         = 0x00000000
-	NIM_MODIFY      = 0x00000001
-	NIM_DELETE      = 0x00000002
-	IMAGE_ICON      = 1          // Loads an icon
-	LR_LOADFROMFILE = 0x00000010 // Loads the stand-alone image from the file
-	LR_DEFAULTSIZE  = 0x00000040 // Loads default-size icon for windows(SM_CXICON x SM_CYICON) if cx, cy are set to zero
-	NIF_ICON        = 0x00000002
-	WM_CLOSE        = 0x0010
-
-	NIF_TIP = 0x00000004
-
-	WM_COMMAND    = 0x0111
-	WM_DESTROY    = 0x0002
-	WM_ENDSESSION = 0x16
-
-	WM_RBUTTONUP     = 0x0205
-	WM_LBUTTONUP     = 0x0202
-	WM_LBUTTONDBLCLK = 0x0203
-	WM_RBUTTONDBLCLK = 0x0206
-
-	IDI_APPLICATION = 32512
-	IDC_ARROW       = 32512 // Standard arrow
-
-	SW_HIDE       = 0
-	CW_USEDEFAULT = 0x80000000
-
-	WS_CAPTION     = 0x00C00000
-	WS_MAXIMIZEBOX = 0x00010000
-	WS_MINIMIZEBOX = 0x00020000
-	WS_OVERLAPPED  = 0x00000000
-	WS_SYSMENU     = 0x00080000
-	WS_THICKFRAME  = 0x00040000
-
-	WS_OVERLAPPEDWINDOW = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
-
-	CS_HREDRAW = 0x0002
-	CS_VREDRAW = 0x0001
-
-	NIF_MESSAGE = 0x00000001
-
-	WM_USER = 0x0400
-
-	MIM_APPLYTOSUBMENUS = 0x80000000 // Settings apply to the menu and all of its submenus
-	MIIM_FTYPE          = 0x00000100
-	MIIM_STRING         = 0x00000040
-	MIIM_ID             = 0x00000002
-	MIIM_STATE          = 0x00000001
-
-	MFT_STRING = 0x00000000
-
-	MFS_CHECKED  = 0x00000008
-	MFS_DISABLED = 0x00000003
-
-	MFT_SEPARATOR               = 0x00000800
-	MF_BYCOMMAND                = 0x00000000
-	ERROR_SUCCESS syscall.Errno = 0
-
-	TPM_BOTTOMALIGN = 0x0020
-	TPM_LEFTALIGN   = 0x0000
-
-	MIIM_SUBMENU = 0x00000004
-	MIIM_BITMAP  = 0x00000080
+	className                         = "SystrayClass"
+	windowName                        = ""
+	NIM_ADD                           = 0x00000000
+	NIM_MODIFY                        = 0x00000001
+	NIM_DELETE                        = 0x00000002
+	IMAGE_ICON                        = 1          // Loads an icon
+	LR_LOADFROMFILE                   = 0x00000010 // Loads the stand-alone image from the file
+	LR_DEFAULTSIZE                    = 0x00000040 // Loads default-size icon for windows(SM_CXICON x SM_CYICON) if cx, cy are set to zero
+	NIF_ICON                          = 0x00000002
+	WM_CLOSE                          = 0x0010
+	NIF_TIP                           = 0x00000004
+	WM_COMMAND                        = 0x0111
+	WM_DESTROY                        = 0x0002
+	WM_ENDSESSION                     = 0x16
+	WM_RBUTTONUP                      = 0x0205
+	WM_LBUTTONUP                      = 0x0202
+	WM_LBUTTONDBLCLK                  = 0x0203
+	WM_RBUTTONDBLCLK                  = 0x0206
+	IDI_APPLICATION                   = 32512
+	IDC_ARROW                         = 32512 // Standard arrow
+	SW_HIDE                           = 0
+	CW_USEDEFAULT                     = 0x80000000
+	WS_CAPTION                        = 0x00C00000
+	WS_MAXIMIZEBOX                    = 0x00010000
+	WS_MINIMIZEBOX                    = 0x00020000
+	WS_OVERLAPPED                     = 0x00000000
+	WS_SYSMENU                        = 0x00080000
+	WS_THICKFRAME                     = 0x00040000
+	WS_OVERLAPPEDWINDOW               = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
+	CS_HREDRAW                        = 0x0002
+	CS_VREDRAW                        = 0x0001
+	NIF_MESSAGE                       = 0x00000001
+	WM_USER                           = 0x0400
+	MIM_APPLYTOSUBMENUS               = 0x80000000 // Settings apply to the menu and all of its submenus
+	MIIM_FTYPE                        = 0x00000100
+	MIIM_STRING                       = 0x00000040
+	MIIM_ID                           = 0x00000002
+	MIIM_STATE                        = 0x00000001
+	MFT_STRING                        = 0x00000000
+	MFS_CHECKED                       = 0x00000008
+	MFS_DISABLED                      = 0x00000003
+	MFT_SEPARATOR                     = 0x00000800
+	MF_BYCOMMAND                      = 0x00000000
+	ERROR_SUCCESS       syscall.Errno = 0
+	TPM_BOTTOMALIGN                   = 0x0020
+	TPM_LEFTALIGN                     = 0x0000
+	MIIM_SUBMENU                      = 0x00000004
+	MIIM_BITMAP                       = 0x00000080
 )
 
 // Helpful sources: https://github.com/golang/exp/blob/master/shiny/driver/internal/win32
@@ -416,17 +399,23 @@ func (t *winTray) initInstance() error {
 	}
 	t.window = windows.Handle(windowHandle)
 
-	pShowWindow.Call(
+	_, _, err = pShowWindow.Call(
 		uintptr(t.window),
 		uintptr(SW_HIDE),
 	)
+	if err != nil {
+		return err
+	}
 
-	pUpdateWindow.Call(
+	_, _, err = pUpdateWindow.Call(
 		uintptr(t.window),
 	)
+	if err != nil {
+		return err
+	}
 
 	t.nid = &notifyIconData{
-		Wnd:             windows.Handle(t.window),
+		Wnd:             t.window,
 		ID:              100,
 		Flags:           NIF_MESSAGE,
 		CallbackMessage: t.wmSystrayMessage,
@@ -642,7 +631,10 @@ func (t *winTray) showMenu() error {
 	if res == 0 {
 		return err
 	}
-	pSetForegroundWindow.Call(uintptr(t.window))
+	_, _, err = pSetForegroundWindow.Call(uintptr(t.window))
+	if err != nil {
+		return err
+	}
 
 	res, _, err = pTrackPopupMenu.Call(
 		uintptr(t.menu),
@@ -690,20 +682,30 @@ func nativeLoop() error {
 		if int32(ret) <= 0 {
 			return err
 		}
-		pTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
-		pDispatchMessage.Call(uintptr(unsafe.Pointer(&m)))
+		_, _, err = pTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
+		if err != nil {
+			return err
+		}
+		_, _, err = pDispatchMessage.Call(uintptr(unsafe.Pointer(&m)))
+		if err != nil {
+			return err
+		}
 	}
 }
 
-func quit() {
+func quit() error {
 	if wt.window != 0 {
-		pPostMessage.Call(
+		_, _, err := pPostMessage.Call(
 			uintptr(wt.window),
 			WM_CLOSE,
 			0,
 			0,
 		)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // SetIcon sets the systray icon.

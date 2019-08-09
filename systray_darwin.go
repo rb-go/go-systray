@@ -20,8 +20,10 @@ func nativeLoop() (err error) {
 	return
 }
 
-func quit() {
+func quit() error {
 	C.quit()
+	//todo check error
+	return nil
 }
 
 // Sets the systray icon.

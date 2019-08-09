@@ -105,10 +105,11 @@ func Run(onReady func(), onExit func()) error {
 }
 
 // Quit the systray
-func Quit() {
+func Quit() error {
 	if atomic.LoadInt32(&hasStarted) == 1 && atomic.CompareAndSwapInt32(&hasQuit, 0, 1) {
-		quit()
+		return quit()
 	}
+	return nil
 }
 
 // AddMenuItem adds menu item with designated title and tooltip, returning a channel
