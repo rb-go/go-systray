@@ -119,7 +119,7 @@ type wndClassEx struct {
 func (w *wndClassEx) register() error {
 	w.Size = uint32(unsafe.Sizeof(*w))
 	res, _, err := pRegisterClass.Call(uintptr(unsafe.Pointer(w)))
-	if res == 0 {
+	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	return nil
@@ -132,7 +132,7 @@ func (w *wndClassEx) unregister() error {
 		uintptr(unsafe.Pointer(w.ClassName)),
 		uintptr(w.Instance),
 	)
-	if res == 0 {
+	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	return nil
@@ -162,7 +162,7 @@ func (nid *notifyIconData) add() error {
 		uintptr(NIM_ADD),
 		uintptr(unsafe.Pointer(nid)),
 	)
-	if res == 0 {
+	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	return nil
@@ -173,7 +173,7 @@ func (nid *notifyIconData) modify() error {
 		uintptr(NIM_MODIFY),
 		uintptr(unsafe.Pointer(nid)),
 	)
-	if res == 0 {
+	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	return nil
@@ -184,7 +184,7 @@ func (nid *notifyIconData) delete() error {
 		uintptr(NIM_DELETE),
 		uintptr(unsafe.Pointer(nid)),
 	)
-	if res == 0 {
+	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	return nil
@@ -245,7 +245,7 @@ func (t *winTray) setIcon(src string) error {
 			0,
 			LR_LOADFROMFILE|LR_DEFAULTSIZE,
 		)
-		if res == 0 {
+		if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 			return err
 		}
 		h = windows.Handle(res)
@@ -337,21 +337,21 @@ func (t *winTray) initInstance() error {
 	t.loadedImages = make(map[string]windows.Handle)
 
 	instanceHandle, _, err := pGetModuleHandle.Call(0)
-	if instanceHandle == 0 {
+	if instanceHandle == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	t.instance = windows.Handle(instanceHandle)
 
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms648072(v=vs.85).aspx
 	iconHandle, _, err := pLoadIcon.Call(0, uintptr(IDI_APPLICATION))
-	if iconHandle == 0 {
+	if iconHandle == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	t.icon = windows.Handle(iconHandle)
 
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms648391(v=vs.85).aspx
 	cursorHandle, _, err := pLoadCursor.Call(0, uintptr(IDC_ARROW))
-	if cursorHandle == 0 {
+	if cursorHandle == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	t.cursor = windows.Handle(cursorHandle)
@@ -394,7 +394,7 @@ func (t *winTray) initInstance() error {
 		uintptr(t.instance),
 		uintptr(0),
 	)
-	if windowHandle == 0 {
+	if windowHandle == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	t.window = windows.Handle(windowHandle)
@@ -403,14 +403,14 @@ func (t *winTray) initInstance() error {
 		uintptr(t.window),
 		uintptr(SW_HIDE),
 	)
-	if err != nil {
+	if err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 
 	_, _, err = pUpdateWindow.Call(
 		uintptr(t.window),
 	)
-	if err != nil {
+	if err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 
@@ -427,7 +427,7 @@ func (t *winTray) initInstance() error {
 
 func (t *winTray) createMenu() error {
 	menuHandle, _, err := pCreatePopupMenu.Call()
-	if menuHandle == 0 {
+	if menuHandle == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	t.menu = windows.Handle(menuHandle)
@@ -447,7 +447,7 @@ func (t *winTray) createMenu() error {
 		uintptr(t.menu),
 		uintptr(unsafe.Pointer(&mi)),
 	)
-	if res == 0 {
+	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	return nil
@@ -457,7 +457,7 @@ func (t *winTray) createMenu() error {
 // it in the menus map using the id as key
 func createSubMenu(id int32) error {
 	menuHandle, _, err := pCreatePopupMenu.Call()
-	if menuHandle == 0 {
+	if menuHandle == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	menus[id] = windows.Handle(menuHandle)
@@ -477,7 +477,7 @@ func createSubMenu(id int32) error {
 		uintptr(menus[id]),
 		uintptr(unsafe.Pointer(&mi)),
 	)
-	if res == 0 {
+	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	return nil
@@ -509,7 +509,7 @@ func (t *winTray) addSubmenuToTray(item *MenuItem) error {
 			1,
 			uintptr(unsafe.Pointer(&mi)),
 		)
-		if res == 0 {
+		if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 			return err
 		}
 	} else {
@@ -519,7 +519,7 @@ func (t *winTray) addSubmenuToTray(item *MenuItem) error {
 			0,
 			uintptr(unsafe.Pointer(&mi)),
 		)
-		if res == 0 {
+		if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 			return err
 		}
 	}
@@ -570,7 +570,7 @@ func (t *winTray) addOrUpdateMenuItem(item *MenuItem) error {
 			1,
 			uintptr(unsafe.Pointer(&mi)),
 		)
-		if res == 0 {
+		if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 			return err
 		}
 	} else {
@@ -580,7 +580,7 @@ func (t *winTray) addOrUpdateMenuItem(item *MenuItem) error {
 			0,
 			uintptr(unsafe.Pointer(&mi)),
 		)
-		if res == 0 {
+		if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 			return err
 		}
 	}
@@ -604,7 +604,7 @@ func (t *winTray) addSeparatorMenuItem(menuId int32) error {
 		1,
 		uintptr(unsafe.Pointer(&mi)),
 	)
-	if res == 0 {
+	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 
@@ -618,7 +618,7 @@ func (t *winTray) hideMenuItem(menuId int32) error {
 		uintptr(uint32(menuId)),
 		MF_BYCOMMAND,
 	)
-	if res == 0 {
+	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 
@@ -628,11 +628,11 @@ func (t *winTray) hideMenuItem(menuId int32) error {
 func (t *winTray) showMenu() error {
 	p := point{}
 	res, _, err := pGetCursorPos.Call(uintptr(unsafe.Pointer(&p)))
-	if res == 0 {
+	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 	_, _, err = pSetForegroundWindow.Call(uintptr(t.window))
-	if err != nil {
+	if err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 
@@ -645,7 +645,7 @@ func (t *winTray) showMenu() error {
 		uintptr(t.window),
 		0,
 	)
-	if res == 0 {
+	if res == 0 && err.(syscall.Errno) != ERROR_SUCCESS {
 		return err
 	}
 
@@ -683,11 +683,11 @@ func nativeLoop() error {
 			return err
 		}
 		_, _, err = pTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
-		if err != nil {
+		if err.(syscall.Errno) != ERROR_SUCCESS {
 			return err
 		}
 		_, _, err = pDispatchMessage.Call(uintptr(unsafe.Pointer(&m)))
-		if err != nil {
+		if err.(syscall.Errno) != ERROR_SUCCESS {
 			return err
 		}
 	}
@@ -701,7 +701,7 @@ func quit() error {
 			0,
 			0,
 		)
-		if err != nil {
+		if err.(syscall.Errno) != ERROR_SUCCESS {
 			return err
 		}
 	}
