@@ -1,10 +1,3 @@
-Package systray is a cross platfrom Go library to place an icon and menu in the notification area.
-Tested on Windows 8, 10, Mac OSX, Ubuntu 14.10 and Debian 7.6.
-
-**WIP! WORK IN PROGRESS! Can be unstable!**
-
-**I tries to fix multilevel menu on windows. Currently work only 2 levels.**
-
 
 [![license](https://img.shields.io/github/license/riftbit/go-systray.svg)](LICENSE)
 [![GoDoc](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/riftbit/go-systray)
@@ -12,6 +5,17 @@ Tested on Windows 8, 10, Mac OSX, Ubuntu 14.10 and Debian 7.6.
 [![Build Status](https://travis-ci.org/riftbit/go-systray.svg?branch=master)](https://travis-ci.org/riftbit/go-systray)
 [![Go Report Card](https://goreportcard.com/badge/github.com/riftbit/go-systray)](https://goreportcard.com/report/github.com/riftbit/go-systray)
 [![Release](https://img.shields.io/badge/release-v1.0.0-blue.svg?style=flat)](https://github.com/riftbit/go-systray/releases)
+
+
+### WIP! WORK IN PROGRESS! Can be unstable!
+
+**I tries to fix multilevel menu on windows. Currently work only 2 levels.**
+
+
+## About 
+
+Package systray is a cross platfrom Go library to place an icon and menu in the notification area.
+Tested on Windows 8, 10, Mac OSX, Ubuntu 14.10 and Debian 7.6.
 
 ### Difference with getlantern/systray
 
